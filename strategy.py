@@ -173,16 +173,10 @@ class ORBEngine:
             return None
         if ts.time() >= self.square_off:
             return Signal("EXIT", p.side, "SQUARE_OFF", ts, ltp)
-        if p.side == "LONG":
-            if ltp >= p.target:
-                return Signal("EXIT", p.side, "TARGET", ts, ltp)
-            if ltp <= p.sl:
-                return Signal("EXIT", p.side, "STOP_LOSS", ts, ltp)
-        else:
-            if ltp <= p.target:
-                return Signal("EXIT", p.side, "TARGET", ts, ltp)
-            if ltp >= p.sl:
-                return Signal("EXIT", p.side, "STOP_LOSS", ts, ltp)
+        if p.side == "LONG" and ltp >= p.target:
+            return Signal("EXIT", p.side, "TARGET", ts, ltp)
+        if p.side == "SHORT" and ltp <= p.target:
+            return Signal("EXIT", p.side, "TARGET", ts, ltp)
         return None
 
     def square_off_signal(self, ts: dt.datetime, spot: float) -> Optional[Signal]:

@@ -26,10 +26,8 @@ class PaperBroker:
         self._tz = tz
         self._count = 0
 
-    def market_order(self, inst: Instrument, side: str, qty: int,
-                     price: float = None) -> Fill:
-        if price is None:
-            price = self._feed.ltp(inst.token)
+    def market_order(self, inst: Instrument, side: str, qty: int) -> Fill:
+        price = self._feed.ltp(inst.token)
         if price is None:
             raise RuntimeError(f"no live price for {inst.symbol}; cannot simulate fill")
         self._count += 1

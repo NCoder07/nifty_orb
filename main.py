@@ -292,18 +292,19 @@ class Session:
                        key=lambda c: c.start)
         for c in fresh:
             sig = self.engine.on_candle(c)
-            log.info("candle %s  O %.2f H %.2f L %.2f C %.2f", c.label, c.open, c.high, c.low, c.close)
-            if self.engine.range_done and c.close_time.time() == self.engine.range_end:
-                log.info("opening range set  high %.2f  low %.2f  (trading this range)",
-                         self.engine.range_high, self.engine.range_low)
+            log.info("candle %s  O %.2f H %.2f L %.2f C %.2f%s", c.label, c.open, c.high, c.low, c.close,
+                     self._range_note(c))
             if sig is not None:
-                delay = (t - c.close_time).total_seconds()
-                too_old = delay > config.CANDLE_MINUTES * 60 + 30
-                if delay > 15:
-                    log.info("candle %s arrived %.0fs after close", c.label, delay)
+                too_old = (t - c.close_time).total_seconds() > config.CANDLE_MINUTES * 60 + 30
                 self.execute(sig, stale=too_old)
         if fresh:
             self._save_state()
+
+    def _range_note(self, c) -> str:
+        e = self.engine
+        if e.range_done and c.close_time.time() == e.range_end:
+            return f"  -> opening range set: high {e.range_high:.2f} low {e.range_low:.2f}"
+        return ""
 
     # -- execution --
     def execute(self, sig: Signal, stale: bool = False):
@@ -319,8 +320,7 @@ class Session:
             try:
                 qty = self.quantity()
                 side = "BUY" if sig.side == "LONG" else "SELL"
-                paper_price = sig.spot if config.PAPER_TRADING else None
-                fill = self.broker.market_order(self.trade_inst, side, qty, paper_price)
+                fill = self.broker.market_order(self.trade_inst, side, qty)
             except Exception as exc:
                 log.error("[%s] entry failed: %s", tag, exc)
                 return
@@ -334,8 +334,7 @@ class Session:
                 return
             side = "SELL" if p.side == "LONG" else "BUY"
             try:
-                paper_price = sig.spot if config.PAPER_TRADING else None
-                fill = self.broker.market_order(self.trade_inst, side, p.qty, paper_price)
+                fill = self.broker.market_order(self.trade_inst, side, p.qty)
             except Exception as exc:
                 log.error("[%s] exit failed (%s); will retry: %s", tag, sig.reason, exc)
                 self.pending_exit = sig
@@ -370,9 +369,7 @@ class Session:
                                 - dt.timedelta(minutes=config.CANDLE_MINUTES))
                     if MARKET_OPEN <= expected.time() < MARKET_CLOSE:
                         self.process_candles(expected_start=expected)
-                    # Advance by exactly one candle so a slow/failed fetch never
-                    # causes subsequent candle boundaries to be skipped.
-                    next_fetch += dt.timedelta(minutes=config.CANDLE_MINUTES)
+                    next_fetch = next_fetch_time(now())
 
                 if self.engine.position is not None:
                     if self.pending_exit is not None:
